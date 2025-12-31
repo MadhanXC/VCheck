@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
@@ -93,68 +94,87 @@ export function SubmissionForm({
     }
   }, [stream]);
 
+  // Effect for initially getting permission and listing devices when user clicks "Add Photo"
   useEffect(() => {
-    const getCameraDevices = async () => {
-      if (!isTakingPhoto) {
-        stopStream();
-        return;
-      }
-  
+    const getDevices = async () => {
+      if (!isTakingPhoto) return;
+
       try {
-        // Get permissions first without a specific device
+        // Just get permission first to be able to enumerate
         const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
         setHasCameraPermission(true);
-  
-        // Now list devices
+
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoInputs = devices.filter((d) => d.kind === 'videoinput');
         setVideoDevices(videoInputs);
-  
-        // If a device is selected, use it. Otherwise, use the first one.
-        const deviceIdToUse = selectedDeviceId || (videoInputs.length > 0 ? videoInputs[0].deviceId : undefined);
         
-        if (deviceIdToUse) {
-            if (!selectedDeviceId) {
-              setSelectedDeviceId(deviceIdToUse);
-            }
-            // Stop the temporary stream before opening the selected one
-            tempStream.getTracks().forEach(track => track.stop());
-            
-            const newStream = await navigator.mediaDevices.getUserMedia({
-                video: { deviceId: { exact: deviceIdToUse } },
-            });
-
-            setStream(newStream);
-            if (videoRef.current) {
-                videoRef.current.srcObject = newStream;
-            }
-        } else {
-             // If no specific device, use the temp stream
-             setStream(tempStream);
-             if (videoRef.current) {
-                videoRef.current.srcObject = tempStream;
-             }
+        if (videoInputs.length > 0 && !selectedDeviceId) {
+          // Prioritize back camera
+          const backCamera = videoInputs.find(device => 
+            device.label.toLowerCase().includes('back') || 
+            device.label.toLowerCase().includes('rear') || 
+            device.label.toLowerCase().includes('environment')
+          );
+          setSelectedDeviceId(backCamera ? backCamera.deviceId : videoInputs[0].deviceId);
         }
-  
+
+        // We are done with this temporary stream
+        tempStream.getTracks().forEach(track => track.stop());
+
       } catch (error) {
-        console.error('Error accessing camera:', error);
+        console.error('Error getting camera devices:', error);
         setHasCameraPermission(false);
         toast({
           variant: 'destructive',
           title: 'Camera Access Denied',
-          description:
-            'Please enable camera permissions in your browser settings to use this feature.',
+          description: 'Please enable camera permissions in your browser settings.',
         });
         setIsTakingPhoto(false);
       }
     };
-  
-    getCameraDevices();
-  
+
+    getDevices();
+  }, [isTakingPhoto, selectedDeviceId, toast]);
+
+
+  // Effect for starting the stream when a device is selected or photo mode is entered
+  useEffect(() => {
+    if (isTakingPhoto && selectedDeviceId) {
+      const startStream = async () => {
+        // Stop any existing stream before starting a new one
+        if (stream) {
+          stopStream();
+        }
+
+        try {
+          const newStream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: selectedDeviceId } },
+          });
+          setStream(newStream);
+          if (videoRef.current) {
+            videoRef.current.srcObject = newStream;
+          }
+        } catch (error) {
+          console.error('Error starting camera stream:', error);
+          toast({
+            variant: 'destructive',
+            title: 'Camera Error',
+            description: 'Could not start the selected camera.',
+          });
+        }
+      };
+      startStream();
+    } else {
+      stopStream();
+    }
+    
+    // Cleanup function to stop the stream when component unmounts or deps change
     return () => {
       stopStream();
     };
-  }, [isTakingPhoto, selectedDeviceId, toast, stopStream]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTakingPhoto, selectedDeviceId]); // Only re-run when these change
+
 
   const handleCaptureAndAdd = () => {
     if (videoRef.current && canvasRef.current) {
@@ -414,3 +434,5 @@ export function SubmissionForm({
     </Form>
   );
 }
+
+    
