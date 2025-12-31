@@ -1,0 +1,127 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "type": "object",
+      "description": "Stores user profile information.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The user's full name."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The user's email address."
+        }
+      },
+      "required": ["name", "email"]
+    },
+    "MotoTask": {
+      "title": "Moto Task",
+      "type": "object",
+      "description": "A task for vehicle verification.",
+      "properties": {
+        "vehicleNumber": {
+          "type": "string",
+          "description": "The vehicle's identification number."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the person associated with the task."
+        },
+        "regNumber": {
+          "type": "string",
+          "description": "The vehicle's registration number."
+        },
+        "taskDescription": {
+          "type": "string",
+          "description": "A description of what needs to be done."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the task.",
+          "enum": ["Open", "In Progress", "Completed"]
+        },
+        "isPublic": {
+            "type": "boolean",
+            "description": "Whether the task is publicly accessible."
+        },
+        "formLink": {
+            "type": "string",
+            "description": "The public URL for the verification form."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "vehicleNumber",
+        "name",
+        "regNumber",
+        "taskDescription",
+        "status"
+      ]
+    },
+    "VerificationSubmission": {
+      "title": "Verification Submission",
+      "type": "object",
+      "description": "Data submitted by a public user for a verification task.",
+      "properties": {
+        "verifierName": {
+          "type": "string",
+          "description": "The name of the person submitting the verification."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Notes or comments from the verifier."
+        },
+        "photoUrls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "description": "An array of URLs pointing to the uploaded photos in Firebase Storage."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the submission was created."
+        }
+      },
+      "required": ["verifierName", "notes"]
+    }
+  },
+  "auth": {
+    "providers": [
+      "anonymous",
+      "password"
+    ]
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Stores user profile information like name and email."
+    },
+    "/users/{userId}/motoTasks/{taskId}": {
+      "schema": {
+        "$ref": "#/entities/MotoTask"
+      },
+      "description": "Stores the Moto Tasks for each user."
+    },
+    "/users/{userId}/motoTasks/{taskId}/submissions/{submissionId}": {
+      "schema": {
+        "$ref": "#/entities/VerificationSubmission"
+      },
+      "description": "Stores the verification submissions for a specific MotoTask."
+    }
+  }
+}

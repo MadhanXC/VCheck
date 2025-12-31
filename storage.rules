@@ -1,0 +1,25 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Default deny all reads and writes unless explicitly allowed.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+    
+    // This path is for verification submissions.
+    // The path structure is: submissions/{taskId}/{submissionId}/{fileName}
+    match /submissions/{taskId}/{submissionId}/{fileName} {
+      
+      // Allow anyone to READ the uploaded photos. This is necessary for the
+      // admin dashboard to display the images. The full paths are not guessable.
+      allow read: if true;
+      
+      // Allow WRITE (uploads) for any authenticated user.
+      // In the app, only anonymous users submitting the form are uploading,
+      // and they are authenticated anonymously before the upload begins.
+      allow write: if request.auth != null;
+    }
+  }
+}

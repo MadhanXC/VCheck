@@ -1,0 +1,35 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // --- OWNER-ONLY RULES ---
+    // These rules apply ONLY if the user is the owner of the documents.
+    match /users/{userId}/{path=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // --- PUBLIC ACCESS RULES ---
+    // These rules allow specific public access, even for unauthenticated users.
+    match /users/{userId}/motoTasks/{taskId} {
+      // Allow ANYONE to GET a single motoTask IF it is public.
+      allow get: if get(/databases/$(database)/documents/users/$(userId)/motoTasks/$(taskId)).data.isPublic == true;
+      
+      // Allow ANYONE to UPDATE a motoTask IF it's public AND they are ONLY changing the status to 'Completed'.
+      // This rule is more secure as it checks that no other fields are being changed.
+      allow update: if get(/databases/$(database)/documents/users/$(userId)/motoTasks/$(taskId)).data.isPublic == true
+                      && request.resource.data.status == 'Completed'
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']);
+    }
+
+    match /users/{userId}/motoTasks/{taskId}/submissions/{submissionId} {
+      // Allow ANYONE to CREATE a submission for a motoTask IF that task exists and is public.
+      allow create: if exists(/databases/$(database)/documents/users/$(userId)/motoTasks/$(taskId))
+                       && get(/databases/$(database)/documents/users/$(userId)/motoTasks/$(taskId)).data.isPublic == true;
+    }
+  }
+}
