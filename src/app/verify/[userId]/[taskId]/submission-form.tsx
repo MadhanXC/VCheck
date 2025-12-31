@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { VerificationSubmission, verificationSubmissionSchema } from './schema';
@@ -26,7 +26,7 @@ import {
   useUser,
   useFirestore,
 } from '@/firebase';
-import { Camera, Trash2 } from 'lucide-react';
+import { Camera, Trash2, SwitchCamera } from 'lucide-react';
 import Image from 'next/image';
 import {
   Alert,
@@ -34,6 +34,8 @@ import {
   AlertTitle,
 } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 
 interface SubmissionFormProps {
   userId: string;
@@ -63,6 +65,8 @@ export function SubmissionForm({
   const [isTakingPhoto, setIsTakingPhoto] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
 
 
   const form = useForm<VerificationSubmission>({
@@ -82,26 +86,56 @@ export function SubmissionForm({
     }
   }, [user, isUserLoading, auth]);
 
-  useEffect(() => {
-    if (!isTakingPhoto) {
-        if (stream) {
-            stream.getTracks().forEach((track) => track.stop());
-            setStream(null);
-        }
-        return;
+  const stopStream = useCallback(() => {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      setStream(null);
     }
+  }, [stream]);
 
-    const getCameraPermission = async () => {
+  useEffect(() => {
+    const getCameraDevices = async () => {
+      if (!isTakingPhoto) {
+        stopStream();
+        return;
+      }
+  
       try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-        });
-        setStream(mediaStream);
+        // Get permissions first without a specific device
+        const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
         setHasCameraPermission(true);
+  
+        // Now list devices
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+        setVideoDevices(videoInputs);
+  
+        // If a device is selected, use it. Otherwise, use the first one.
+        const deviceIdToUse = selectedDeviceId || (videoInputs.length > 0 ? videoInputs[0].deviceId : undefined);
+        
+        if (deviceIdToUse) {
+            if (!selectedDeviceId) {
+              setSelectedDeviceId(deviceIdToUse);
+            }
+            // Stop the temporary stream before opening the selected one
+            tempStream.getTracks().forEach(track => track.stop());
+            
+            const newStream = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: { exact: deviceIdToUse } },
+            });
 
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
+            setStream(newStream);
+            if (videoRef.current) {
+                videoRef.current.srcObject = newStream;
+            }
+        } else {
+             // If no specific device, use the temp stream
+             setStream(tempStream);
+             if (videoRef.current) {
+                videoRef.current.srcObject = tempStream;
+             }
         }
+  
       } catch (error) {
         console.error('Error accessing camera:', error);
         setHasCameraPermission(false);
@@ -114,15 +148,13 @@ export function SubmissionForm({
         setIsTakingPhoto(false);
       }
     };
-
-    getCameraPermission();
-
+  
+    getCameraDevices();
+  
     return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
+      stopStream();
     };
-  }, [isTakingPhoto, toast]);
+  }, [isTakingPhoto, selectedDeviceId, toast, stopStream]);
 
   const handleCaptureAndAdd = () => {
     if (videoRef.current && canvasRef.current) {
@@ -135,7 +167,7 @@ export function SubmissionForm({
         context.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
         const dataUri = canvas.toDataURL('image/jpeg');
         setCapturedImages((prev) => [...prev, dataUri]);
-        setIsTakingPhoto(false);
+        setIsTakingPhoto(false); // This will trigger the useEffect cleanup to stop the stream
       }
     }
   };
@@ -228,22 +260,38 @@ export function SubmissionForm({
             </div>
           )}
         </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            onClick={handleCaptureAndAdd}
-            disabled={!hasCameraPermission}
-          >
-            <Camera className="mr-2 h-4 w-4" />
-            Capture & Add
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setIsTakingPhoto(false)}
-          >
-            Cancel
-          </Button>
+        <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+                type="button"
+                onClick={handleCaptureAndAdd}
+                disabled={!hasCameraPermission}
+                className="flex-grow"
+            >
+                <Camera className="mr-2 h-4 w-4" />
+                Capture & Add
+            </Button>
+            {videoDevices.length > 1 && (
+                <Select onValueChange={setSelectedDeviceId} value={selectedDeviceId}>
+                    <SelectTrigger className="sm:w-[200px]">
+                        <SwitchCamera className="mr-2 h-4 w-4" />
+                        <SelectValue placeholder="Select Camera" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {videoDevices.map(device => (
+                            <SelectItem key={device.deviceId} value={device.deviceId}>
+                                {device.label || `Camera ${videoDevices.indexOf(device) + 1}`}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            )}
+            <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setIsTakingPhoto(false)}
+            >
+                Cancel
+            </Button>
         </div>
       </div>
     );
