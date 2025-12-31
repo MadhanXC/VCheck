@@ -35,7 +35,6 @@ import {
   AlertTitle,
 } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
 interface SubmissionFormProps {
@@ -66,8 +65,6 @@ export function SubmissionForm({
   const [isTakingPhoto, setIsTakingPhoto] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
 
 
   const form = useForm<VerificationSubmission>({
@@ -94,86 +91,56 @@ export function SubmissionForm({
     }
   }, [stream]);
 
-  // Effect for initially getting permission and listing devices when user clicks "Add Photo"
+  // Effect to get camera stream when user enters photo mode
   useEffect(() => {
-    const getDevices = async () => {
-      if (!isTakingPhoto) return;
+    // If not taking photo, make sure stream is stopped.
+    if (!isTakingPhoto) {
+      stopStream();
+      return;
+    }
 
+    const getCameraStream = async () => {
+      // Standard way to request the back camera
+      const constraints = { video: { facingMode: 'environment' } };
+      
       try {
-        // Just get permission first to be able to enumerate
-        const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
         setHasCameraPermission(true);
-
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoInputs = devices.filter((d) => d.kind === 'videoinput');
-        setVideoDevices(videoInputs);
-        
-        if (videoInputs.length > 0 && !selectedDeviceId) {
-          // Prioritize back camera
-          const backCamera = videoInputs.find(device => 
-            device.label.toLowerCase().includes('back') || 
-            device.label.toLowerCase().includes('rear') || 
-            device.label.toLowerCase().includes('environment')
-          );
-          setSelectedDeviceId(backCamera ? backCamera.deviceId : videoInputs[0].deviceId);
+        setStream(newStream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = newStream;
         }
-
-        // We are done with this temporary stream
-        tempStream.getTracks().forEach(track => track.stop());
-
       } catch (error) {
-        console.error('Error getting camera devices:', error);
-        setHasCameraPermission(false);
-        toast({
-          variant: 'destructive',
-          title: 'Camera Access Denied',
-          description: 'Please enable camera permissions in your browser settings.',
-        });
-        setIsTakingPhoto(false);
+        console.error('Error accessing back camera:', error);
+        // Fallback to any camera if environment fails
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          setHasCameraPermission(true);
+          setStream(fallbackStream);
+          if (videoRef.current) {
+            videoRef.current.srcObject = fallbackStream;
+          }
+        } catch (fallbackError) {
+           console.error('Error accessing any camera:', fallbackError);
+           setHasCameraPermission(false);
+           toast({
+             variant: 'destructive',
+             title: 'Camera Access Denied',
+             description: 'Please enable camera permissions in your browser settings.',
+           });
+           setIsTakingPhoto(false);
+        }
       }
     };
 
-    getDevices();
-  }, [isTakingPhoto, selectedDeviceId, toast]);
+    getCameraStream();
 
-
-  // Effect for starting the stream when a device is selected or photo mode is entered
-  useEffect(() => {
-    if (isTakingPhoto && selectedDeviceId) {
-      const startStream = async () => {
-        // Stop any existing stream before starting a new one
-        if (stream) {
-          stopStream();
-        }
-
-        try {
-          const newStream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: { exact: selectedDeviceId } },
-          });
-          setStream(newStream);
-          if (videoRef.current) {
-            videoRef.current.srcObject = newStream;
-          }
-        } catch (error) {
-          console.error('Error starting camera stream:', error);
-          toast({
-            variant: 'destructive',
-            title: 'Camera Error',
-            description: 'Could not start the selected camera.',
-          });
-        }
-      };
-      startStream();
-    } else {
-      stopStream();
-    }
-    
-    // Cleanup function to stop the stream when component unmounts or deps change
+    // Cleanup function to stop the stream when component unmounts or mode changes
     return () => {
       stopStream();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTakingPhoto, selectedDeviceId]); // Only re-run when these change
+  }, [isTakingPhoto]);
 
 
   const handleCaptureAndAdd = () => {
@@ -290,21 +257,6 @@ export function SubmissionForm({
                 <Camera className="mr-2 h-4 w-4" />
                 Capture & Add
             </Button>
-            {videoDevices.length > 1 && (
-                <Select onValueChange={setSelectedDeviceId} value={selectedDeviceId}>
-                    <SelectTrigger className="sm:w-[200px]">
-                        <SwitchCamera className="mr-2 h-4 w-4" />
-                        <SelectValue placeholder="Select Camera" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {videoDevices.map(device => (
-                            <SelectItem key={device.deviceId} value={device.deviceId}>
-                                {device.label || `Camera ${videoDevices.indexOf(device) + 1}`}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            )}
             <Button
                 type="button"
                 variant="ghost"
@@ -434,5 +386,3 @@ export function SubmissionForm({
     </Form>
   );
 }
-
-    
