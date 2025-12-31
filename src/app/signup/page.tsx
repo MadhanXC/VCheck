@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -14,7 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast'; // ✅ correct hook
+import { useToast } from '@/components/ui/use-toast';
 import { useAuth, useFirestore } from '@/firebase';
 import {
   createUserWithEmailAndPassword,
@@ -26,7 +27,7 @@ import Link from 'next/link';
 import { MotorcycleIcon } from '@/components/icons';
 import { FirebaseError } from 'firebase/app';
 
-const ACCESS_CODE = 'Madhan@123';
+const ACCESS_CODE = process.env.NEXT_PUBLIC_SIGNUP_ACCESS_CODE;
 
 const signupSchema = z
   .object({
