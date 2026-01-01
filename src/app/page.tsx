@@ -55,7 +55,7 @@ export default function DashboardPage() {
   const [newTaskPlaceholder, setNewTaskPlaceholder] = useState<MotoTask | null>(null);
 
   useEffect(() => {
-    if (!isUserLoading && !user) {
+    if (!isUserLoading && (!user || user.isAnonymous)) {
       router.push('/auth');
     }
   }, [isUserLoading, user, router]);
