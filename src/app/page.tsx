@@ -522,10 +522,10 @@ export default function DashboardPage() {
     </>
   );
 
-  if (isUserLoading || !user) {
+  if (isUserLoading || !user || user.isAnonymous) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Skeleton className="h-12 w-12 rounded-full" />
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
     );
   }
