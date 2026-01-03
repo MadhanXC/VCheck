@@ -204,7 +204,11 @@ export default function DashboardPage() {
       const photoPromises = submissions.flatMap((sub, subIndex) => 
         (sub.photoUrls || []).map(async (url, photoIndex) => {
           try {
-            const response = await fetch(url);
+            const urlObject = new URL(url);
+            urlObject.searchParams.delete('token');
+            const urlToFetch = urlObject.toString();
+
+            const response = await fetch(urlToFetch);
             if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
             const blob = await response.blob();
             const fileName = `submission_${sub.id}_photo_${photoIndex + 1}.jpg`;
@@ -409,12 +413,16 @@ export default function DashboardPage() {
         const submissionsRef = collection(firestore, 'users', user.uid, 'motoTasks', task.id, 'submissions');
         const submissionsSnap = await getDocs(submissionsRef);
         
-        const submissions = submissionsSnap.docs.map(doc => ({ ...doc.data() } as VerificationSubmission & { id: string }));
+        const submissions = submissionsSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as VerificationSubmission & { id: string }));
 
         const photoPromises = submissions.flatMap(sub => 
           (sub.photoUrls || []).map(async (url, photoIndex) => {
             try {
-              const response = await fetch(url);
+              const urlObject = new URL(url);
+              urlObject.searchParams.delete('token');
+              const urlToFetch = urlObject.toString();
+              
+              const response = await fetch(urlToFetch);
               if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
               const blob = await response.blob();
               // Extract original filename from URL if possible, otherwise generate one
@@ -698,3 +706,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
